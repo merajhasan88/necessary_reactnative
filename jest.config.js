@@ -3,6 +3,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
+  setupFiles: ['<rootDir>/test/support/setup.ts'],
   moduleNameMapper: {
     '^react-native$': '<rootDir>/test/support/reactNativeStub.ts',
   },
