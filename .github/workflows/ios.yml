@@ -1,0 +1,139 @@
+# iOS on GitHub's macOS machines.
+#
+#   * The library on older and newer Xcode: the SDK's own native iOS code type-checked against each
+#     Xcode's iOS SDK, so a release keeps building for apps that are not on the newest tools.
+#   * The example app built for a phone without code signing, packaged by hand as an .ipa (a zip
+#     with the bundle under Payload/), kept as the run's artifact for seven days. Sign it yourself,
+#     or install it on a phone that installs unsigned builds.
+#
+# The backends the example offers: the input of a run started by hand, or the repository variable
+# NECESSARY_BACKENDS ("Python=https://…;TypeScript=https://…"); with neither, src/backends.json as
+# committed.
+name: iOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      backends:
+        description: 'The example''s backends: Name=https://…;Other=https://…'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  library:
+    name: The library's native code on Xcode ${{ matrix.xcode }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            xcode: '15.4'
+          - runner: macos-15
+            xcode: '16.4'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode ${{ matrix.xcode }}
+        run: |
+          APP=$(ls -d /Applications/Xcode_${{ matrix.xcode }}*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$APP" ]; then sudo xcode-select -s "$APP"; fi
+          xcodebuild -version
+
+      - name: Type-check the SDK's native iOS code for iOS 15
+        run: |
+          set -o pipefail
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          xcrun --sdk iphoneos swiftc -typecheck -swift-version 5 \
+            -target arm64-apple-ios15.0 -sdk "$SDK" ios/*.swift 2>&1 | tee typecheck.log || {
+            grep -E ': (error|fatal error):' typecheck.log | head -40 | while IFS= read -r line; do
+              echo "::error::${line//%/%25}"
+            done
+            exit 1
+          }
+          echo "::notice::$(xcodebuild -version | head -1): the SDK's native iOS code type-checks for iOS 15"
+
+  example:
+    name: The example app, unsigned
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      BACKENDS: ${{ inputs.backends || vars.NECESSARY_BACKENDS || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Xcode
+        run: |
+          APP=$(ls -d /Applications/Xcode_16.4*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$APP" ]; then sudo xcode-select -s "$APP"; fi
+          xcodebuild -version
+          pod --version
+
+      - name: The example's packages
+        working-directory: example
+        run: npm ci --no-audit --no-fund
+
+      - name: The backends it offers
+        working-directory: example
+        run: |
+          if [ -n "$BACKENDS" ]; then
+            node -e '
+              const entries = process.env.BACKENDS.split(";").filter((e) => e.includes("="))
+                .map((e) => [e.slice(0, e.indexOf("=")).trim(), e.slice(e.indexOf("=") + 1).trim()]);
+              require("fs").writeFileSync("src/backends.json", JSON.stringify(Object.fromEntries(entries), null, 2) + "\n");
+              console.log(entries.length + " backends");
+            '
+          else
+            echo "src/backends.json as committed"
+          fi
+
+      - name: Pods
+        working-directory: example/ios
+        run: pod install
+
+      - name: Build for a device without code signing
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -workspace example/ios/NecessaryExample.xcworkspace -scheme NecessaryExample \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee build.log | grep -E '^(\*\*|.*error:)' || true
+          grep -q '\*\* BUILD SUCCEEDED \*\*' build.log || {
+            grep -E ': (error|fatal error):' build.log | head -60 | while IFS= read -r line; do
+              echo "::error::${line//%/%25}"
+            done
+            tail -80 build.log
+            exit 1
+          }
+
+      - name: Package the app as an unsigned .ipa
+        run: |
+          set -e
+          APP=build/Build/Products/Release-iphoneos/NecessaryExample.app
+          test -d "$APP" || { echo "::error::NecessaryExample.app not found at $APP"; exit 1; }
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../NecessaryExample-unsigned.ipa Payload)
+          ls -lh NecessaryExample-unsigned.ipa
+          shasum -a 256 NecessaryExample-unsigned.ipa | tee NecessaryExample-unsigned.ipa.sha256
+          echo "::notice::NecessaryExample-unsigned.ipa $(cut -d' ' -f1 NecessaryExample-unsigned.ipa.sha256)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NecessaryExample-unsigned
+          path: |
+            NecessaryExample-unsigned.ipa
+            NecessaryExample-unsigned.ipa.sha256
+          retention-days: 7

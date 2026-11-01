@@ -1,0 +1,83 @@
+// The SDK's native side on Android, built inside the app that links it: the app's root project
+// provides the Android and React Native Gradle plugins, and the plugin of the native modules'
+// language, and the versions below where it sets none.
+
+def extOrDefault(String name, Object fallback) {
+  return rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+apply plugin: "com.facebook.react"
+
+android {
+  namespace "com.necessarysdk.reactnative"
+  compileSdkVersion extOrDefault("compileSdkVersion", 36)
+  if (rootProject.ext.has("ndkVersion")) {
+    ndkVersion rootProject.ext.get("ndkVersion")
+  }
+
+  defaultConfig {
+    minSdkVersion Math.max(24, extOrDefault("minSdkVersion", 24) as int)
+    targetSdkVersion extOrDefault("targetSdkVersion", 36)
+    externalNativeBuild {
+      cmake {
+        cppFlags "-std=c++17"
+      }
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+      path "src/main/cpp/CMakeLists.txt"
+    }
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  buildTypes {
+    release {
+      minifyEnabled false
+    }
+  }
+
+  testOptions {
+    unitTests {
+      includeAndroidResources = true
+      all {
+        outputs.upToDateWhen { false }
+        testLogging {
+          events "passed", "skipped", "failed", "standardOut", "standardError"
+          showStandardStreams = true
+        }
+      }
+    }
+  }
+}
+
+kotlin {
+  compilerOptions {
+    jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+  }
+}
+
+repositories {
+  google()
+  mavenCentral()
+}
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+  // The collectors' failure handling, the step-up key's verdicts and the key lookups, tested on
+  // the JVM.
+  testImplementation "junit:junit:4.13.2"
+}
+
+react {
+  jsRootDir = file("../src/")
+  libraryName = "NecessarySpec"
+  codegenJavaPackageName = "com.necessarysdk.reactnative"
+}

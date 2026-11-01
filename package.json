@@ -1,0 +1,83 @@
+{
+  "name": "@necessarysdk/react-native",
+  "version": "0.1.5",
+  "description": "Device integrity for React Native apps: a key the SDK never exports, signed measurements of the phone and the app, and request proofs. The app's backend decides.",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "lib",
+    "android/build.gradle",
+    "android/src/main",
+    "ios",
+    "NecessaryReactNative.podspec",
+    "doc",
+    "contract",
+    "vectors",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "jest",
+    "prepack": "npm run build"
+  },
+  "keywords": [
+    "react-native",
+    "device-integrity",
+    "device-binding",
+    "proof-of-possession",
+    "secure-enclave",
+    "keystore",
+    "tamper-detection",
+    "necessary"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/merajhasan88/necessary_reactnative.git"
+  },
+  "homepage": "https://necessarysdk.com",
+  "bugs": {
+    "url": "https://github.com/merajhasan88/necessary_reactnative/issues"
+  },
+  "license": "Apache-2.0",
+  "author": "Meraj Hasan",
+  "peerDependencies": {
+    "react-native": ">=0.76.0"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.14",
+    "@types/node": "^24.19.2",
+    "jest": "29.7.0",
+    "react-native": "0.88.1",
+    "ts-jest": "29.4.15",
+    "typescript": "6.0.3"
+  },
+  "codegenConfig": {
+    "name": "NecessarySpec",
+    "type": "modules",
+    "jsSrcsDir": "src/native",
+    "android": {
+      "javaPackageName": "com.necessarysdk.reactnative"
+    },
+    "ios": {
+      "modulesProvider": {
+        "NecessaryInstallationKey": "NecessaryInstallationKey",
+        "NecessaryIntegrity": "NecessaryIntegrity",
+        "NecessaryStepUpKey": "NecessaryStepUpKey",
+        "NecessarySecureScreen": "NecessarySecureScreen",
+        "NecessaryStorage": "NecessaryStorage"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">= 20.19.4"
+  }
+}
