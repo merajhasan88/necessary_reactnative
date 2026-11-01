@@ -6,8 +6,9 @@ it does not — signed measurements of the phone and of the app running on it, a
 your app sends — and, if you turn them on, a second key the person must unlock to approve a request, and
 a PIN your backend checks. **It never scores and never decides: your backend does.**
 
-Android 7.0 (API 24) and later; iOS 15 and later. The package declares React Native 0.76 or later; it
-is built and tested with React Native 0.88 on the New Architecture, which the example app runs.
+Android 7.0 (API 24) and later; iOS 15 and later; React Native 0.76 or later with the New Architecture
+(the default since 0.76, the only one since 0.82). It is built and tested with React Native 0.88, which
+the example app runs.
 
 ## Documentation
 
