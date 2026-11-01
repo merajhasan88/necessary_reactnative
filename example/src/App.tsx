@@ -240,7 +240,7 @@ export default function App() {
     <View style={styles.page}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.appBar}>
-        <Text style={styles.appTitle}>Necessary</Text>
+        <Text style={styles.appTitle}>Necessary ReactNative</Text>
         {busy ? <ActivityIndicator color={colors.primary} /> : null}
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
