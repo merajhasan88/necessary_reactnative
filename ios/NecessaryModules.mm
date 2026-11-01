@@ -1,5 +1,9 @@
 #import "NecessaryModules.h"
 
+// What the generated interface of NecessaryNative names: its location delegate, and UIKit.
+#import <CoreLocation/CoreLocation.h>
+#import <UIKit/UIKit.h>
+
 #if __has_include(<NecessaryReactNative/NecessaryReactNative-Swift.h>)
 #import <NecessaryReactNative/NecessaryReactNative-Swift.h>
 #else
