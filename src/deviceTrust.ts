@@ -21,6 +21,7 @@ import {
 } from './requestProof';
 import { NativeStepUpKey, stepUpReenrolProof, StepUpKeyMetadata, StepUpOptions } from './stepUpKey';
 import { HttpTransport, type DeviceTrustTransport, type JsonObject } from './transport';
+import { answerText } from './util/answers';
 
 /**
  * The personal measurements an app may enable (the public guide, section 8). Each is collected
@@ -376,15 +377,15 @@ export class DeviceTrust {
     this.current(generation);
     try {
       const challenge = await this.client.createInstallationChallenge(identity.installationId);
-      const payload = challenge['payload'] as string;
+      const payload = answerText(challenge, 'payload');
       const verified = await this.client.verifyInstallation({
         installationId: identity.installationId,
-        challengeId: challenge['challenge_id'] as string,
+        challengeId: answerText(challenge, 'challenge_id'),
         payload,
         signature: await identity.signPayload(payload),
       });
       this.current(generation);
-      this.session = verified['device_token'] as string;
+      this.session = answerText(verified, 'device_token');
       return this.session;
     } catch (error) {
       if (!(error instanceof ApiException) || retried) {
@@ -711,23 +712,31 @@ export class DeviceTrust {
     const identity = await this.loadIdentity();
     this.current(generation);
     this.stepUpKeyNative.configuredMode = options.mode;
+    // From here the phone's key and the backend's differ until the backend takes the new one:
+    // approvals wait for that.
+    const holdApprovals = async (): Promise<void> => {
+      await this.mutate(generation, () => this.store.setStepUpReenrolPending(true));
+      this.current(generation);
+      this.offeredStepUpKey = null;
+      this.stepUpUnavailable = DeviceTrust.reenrolPending();
+    };
     const newKey = async (replace: boolean): Promise<StepUpKeyMetadata> => {
       if (replace) {
-        // From here the phone's key and the backend's differ until the backend takes the new one:
-        // approvals wait for that.
-        await this.mutate(generation, () => this.store.setStepUpReenrolPending(true));
-        this.current(generation);
-        this.offeredStepUpKey = null;
-        this.stepUpUnavailable = DeviceTrust.reenrolPending();
+        await holdApprovals();
         await this.mutate(generation, () => this.stepUpKeyNative.deleteKey());
       }
-      return this.mutate(generation, () =>
+      const made = await this.mutate(generation, () =>
         this.stepUpKeyNative.getOrCreateKey({
           factor: options.factor,
           mode: options.mode,
           windowSeconds: options.windowSeconds,
         }),
       );
+      // None to replace, the phone having lost it: this one is as new.
+      if (made.created && !replace) {
+        await holdApprovals();
+      }
+      return made;
     };
 
     // A re-enrolment is the explicit recovery: a key the keystore cannot vouch for

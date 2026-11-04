@@ -2,6 +2,7 @@
 
 import type { NativeIntegrityCollector } from './collector';
 import { ApiException } from './errors';
+import { answerText } from './util/answers';
 import { base64UrlNoPadding, utf8Encode } from './util/bytes';
 import { isObject } from './util/native';
 import type { InstallationIdentity } from './installationKey';
@@ -87,17 +88,10 @@ export class ScanChallenge {
 
   static fromJson(value: Record<string, unknown>): ScanChallenge {
     const names = (list: unknown): string[] => (Array.isArray(list) ? list.map((item) => String(item)) : []);
-    const text = (field: string): string => {
-      const item = value[field];
-      if (typeof item !== 'string') {
-        throw new TypeError(`The scan challenge has no ${field}.`);
-      }
-      return item;
-    };
     return new ScanChallenge({
-      challengeId: text('challenge_id'),
-      nonce: text('nonce'),
-      platform: text('platform'),
+      challengeId: answerText(value, 'challenge_id'),
+      nonce: answerText(value, 'nonce'),
+      platform: answerText(value, 'platform'),
       requiredProbes: names(value['required_probes']),
       optionalProbes: names(value['optional_probes']),
       answer: value,

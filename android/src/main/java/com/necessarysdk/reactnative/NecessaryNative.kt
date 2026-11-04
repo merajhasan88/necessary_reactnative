@@ -23,6 +23,7 @@ import java.lang.ref.WeakReference
 import java.security.SecureRandom
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The SDK's native side on Android, one per React Native runtime and shared by its five modules:
@@ -48,9 +49,10 @@ internal class NecessaryNative(private val reactContext: ReactApplicationContext
     private val stepUpKeys = StepUpKeyManager(context)
     private val secureStore = SecureStore(context)
     private val screenGuard = ScreenGuard()
-    // The app's own request for the location permission, answered when the person chooses; the
-    // collector itself never asks.
-    private var pendingLocation: Promise? = null
+    // The app's own request for the location permission, answered when the person chooses, or when
+    // the activity that asked goes; the collector itself never asks. Whichever comes first takes
+    // it: invalidate() runs off the main thread.
+    private val pendingLocation = AtomicReference<Promise?>(null)
     // The activity the window state belongs to: a new one, while the screen is protected, is
     // protected too.
     private var attached: WeakReference<Activity>? = null
@@ -94,21 +96,28 @@ internal class NecessaryNative(private val reactContext: ReactApplicationContext
     // app's own screen.
     fun requestLocationPermission(promise: Promise) = mainHandler.post {
         val activity = reactContext.currentActivity
-        if (locationState() == "precise" || pendingLocation != null || activity !is PermissionAwareActivity) {
+        if (
+            locationState() == "precise" ||
+            activity !is PermissionAwareActivity ||
+            !pendingLocation.compareAndSet(null, promise)
+        ) {
             promise.resolve(locationState())
             return@post
         }
-        pendingLocation = promise
         activity.requestPermissions(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
             LOCATION_REQUEST,
             PermissionListener { requestCode, _, _ ->
                 if (requestCode != LOCATION_REQUEST) return@PermissionListener false
-                pendingLocation?.resolve(locationState())
-                pendingLocation = null
+                answerLocationRequest()
                 true
             },
         )
+    }
+
+    /** The request still waiting, if one is, hears what the app holds now. */
+    private fun answerLocationRequest() {
+        pendingLocation.getAndSet(null)?.resolve(locationState())
     }
 
     private fun locationState(): String = when {
@@ -241,10 +250,15 @@ internal class NecessaryNative(private val reactContext: ReactApplicationContext
 
     override fun onHostPause() {}
 
+    // A location request ends with the activity that asked, recreated or not: React Native keeps
+    // the permission listener in that activity's delegate, and the next one has none, so the
+    // person's choice would never reach it.
+    //
     // Gone for good: a step-up waiting for the confirm-credential result would never hear it, and
     // would hold every later approval at STEPUP_BUSY. A recreated activity still receives the
     // result, so a step-up waiting for it keeps waiting.
     override fun onHostDestroy() {
+        answerLocationRequest()
         val activity = attached?.get() ?: reactContext.currentActivity
         if (activity?.isChangingConfigurations == true) return
         stepUpKeys.cancelPendingConfirmation()
@@ -255,6 +269,7 @@ internal class NecessaryNative(private val reactContext: ReactApplicationContext
         reactContext.removeActivityEventListener(this)
         reactContext.removeLifecycleEventListener(this)
         stepUpKeys.cancelPendingConfirmation()
+        answerLocationRequest()
         worker.shutdown()
         storageWorker.shutdown()
     }

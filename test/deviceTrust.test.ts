@@ -24,6 +24,7 @@ import {
   expectNativeCode,
   FlakyStepUpKey,
   HeldBackend,
+  LostStepUpKey,
   refusal,
   StepUpKey,
   Store,
@@ -47,6 +48,19 @@ test('start registers the key -- with the step-up key -- and proves it', async (
   expect(registration['stepup_key_auth']).toEqual({ factor: 'passcode', mode: 'per_use', window_seconds: 0 });
   expect(backend.calls[2].body['signature']).toBe('signed');
   expect(trust.installationSession).toBe('installation-session');
+});
+
+test('an answer that lacks a field is an ApiException, never a value passed on unseen', async () => {
+  const refused = async (promise: Promise<unknown>): Promise<void> => {
+    await expect(promise).rejects.toBeInstanceOf(ApiException);
+    await promise.catch((error: ApiException) => expect(error.code).toBe('invalid_backend_answer'));
+  };
+  await refused(trustOver(new Backend({ '/v1/installations/verify': [{}] })).start());
+  await refused(trustOver(new Backend({ '/v1/installations/challenge': [{ challenge_id: 'key-challenge' }] })).start());
+  await refused(trustOver(new Backend({ '/v1/installations/challenge': [{ payload: 'cGF5' }] })).start());
+  const trust = trustOver(new Backend({ '/v1/integrity/challenge': [{ challenge_id: 'scan-challenge' }] }));
+  await trust.start();
+  await refused(trust.scan());
 });
 
 test('the installation the backend holds for the key is kept', async () => {
@@ -162,6 +176,19 @@ test('a re-enrolment the backend refused leaves approvals waiting for it, across
   expect(store.reenrolPending).toBe(false);
   expect(restarted.stepUpUnavailable).toBeNull();
   expect(Object.keys((await approve(restarted)).headers)).toContain('X-Step-Up-Proof');
+});
+
+test('a key the phone lost, made again by a re-enrolment the person cancelled, leaves approvals waiting too', async () => {
+  const store = new Store();
+  const trust = trustOver(new Backend(), { store, stepUpKey: new LostStepUpKey(), stepUp: new StepUpOptions() });
+  await trust.start();
+  const reenrol = () => trust.reenrolStepUp({ session: 'account-session', reauthentication: { password: 'pw' } });
+  await expectNativeCode(reenrol(), 'STEPUP_CANCELLED');
+  await expectNativeCode(approve(trust), 'STEPUP_REENROL_PENDING');
+  expect(store.reenrolPending).toBe(true);
+  expect(await reenrol()).toMatchObject({ stepup_key_registered: true });
+  expect(store.reenrolPending).toBe(false);
+  expect(Object.keys((await approve(trust)).headers)).toContain('X-Step-Up-Proof');
 });
 
 test('a re-enrolment whose prompt was cancelled, then whose answer was lost, is finished by the next one', async () => {

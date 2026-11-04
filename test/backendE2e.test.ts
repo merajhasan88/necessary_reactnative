@@ -32,7 +32,7 @@ import {
   type JsonObject,
   type RequestProof,
 } from '../src';
-import { base64UrlDecode } from '../src/util/bytes';
+import { base64UrlDecode, utf8Encode } from '../src/util/bytes';
 import { expectNativeCode } from './support/fakes';
 import { readJson, repositoryDirectory } from './support/repositoryFiles';
 
@@ -254,6 +254,23 @@ withBackend(`against ${backend}`, () => {
     }
     // Every personal measurement is asked for, so that the example app can show each one it enables.
     expect(scan.challenge.optionalProbes).toEqual([...personalMeasurements]);
+  });
+
+  test('a malformed request is answered, never a connection dropped', async () => {
+    const answered = async (route: string, body: Record<string, unknown>): Promise<void> => {
+      const response = await fetch(`${backend}${route}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect((await response.json()) as JsonObject).toEqual(expect.objectContaining({ error: expect.any(Object) }));
+    };
+    // A payload that is valid base64url, of JSON that is no object.
+    const notAnObject = base64UrlNoPadding(utf8Encode('[]'));
+    await answered('/v1/installations/verify', { payload: notAnObject });
+    await answered('/v1/installations/challenge', { installation_id: [] });
+    await answered('/v1/installations/register', { installation_id: 5 });
   });
 
   test('a request carries its proof once', async () => {

@@ -274,6 +274,34 @@ export class CancelledStepUpKey extends DyingStepUpKey {
   }
 }
 
+/** A key the phone lost after it was registered: the next one is made new, and the person cancels its first prompt. */
+export class LostStepUpKey extends StepUpKey {
+  asked = 0;
+  cancelled = false;
+
+  override async getOrCreateKey(args: { factor: string; mode: string; windowSeconds: number }): Promise<StepUpKeyMetadata> {
+    this.asked += 1;
+    const key = await super.getOrCreateKey(args);
+    return new StepUpKeyMetadata({
+      publicKey: key.publicKey,
+      factor: key.factor,
+      mode: key.mode,
+      windowSeconds: key.windowSeconds,
+      securityLevel: key.securityLevel,
+      hardwareBacked: key.hardwareBacked,
+      created: this.asked > 1,
+    });
+  }
+
+  override async sign(payload: string, options: { reason: string }): Promise<string> {
+    if (this.asked > 1 && !this.cancelled) {
+      this.cancelled = true;
+      throw new NativeKeyException('STEPUP_CANCELLED', 'the person cancelled');
+    }
+    return super.sign(payload, options);
+  }
+}
+
 /** Refuses the first key it is asked for, then makes one. */
 export class FlakyStepUpKey extends StepUpKey {
   attempts = 0;
