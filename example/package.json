@@ -1,6 +1,6 @@
 {
   "name": "necessary-example",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "The Necessary SDK against its sample backends: the installation, the scan, an account, requests with and without the person's approval, and requests a backend must refuse.",
   "scripts": {

@@ -1,6 +1,6 @@
 {
   "name": "@necessarysdk/react-native",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Device integrity for React Native apps: a key the SDK never exports, signed measurements of the phone and the app, and request proofs. The app's backend decides.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

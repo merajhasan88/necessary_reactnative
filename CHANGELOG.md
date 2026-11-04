@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6
 
 - `runtime_maps`, `instrumentation_threads` and iOS `dyld_images` leave the app's own folders, package name
   and main executable out of what they read as names.
